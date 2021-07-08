@@ -2,16 +2,15 @@ const express = require("express");
 const router = new express.Router();
 const db = require("../db");
 const ExpressError = require("../expressError");
+const slug = require("slugify")
+
 
 
 router.get("/", async (req, res, next) => {
-    console.log("*****************************************");
     try {
-        console.log("before await")
         const results = await db.query(
             `SELECT code, name 
              FROM companies`);
-        console.log(results);
         return res.json({ companies: results.rows });
     } catch (err) {
         return next(err);
@@ -35,7 +34,7 @@ router.get("/:code", async (req, res, next) => {
              WHERE comp_code = $1`,
             [req.params.code]);
         const compInfo = result.rows[0];
-        compInfo['invoices'] = invsInfo.rows[0];
+        compInfo['invoices'] = invsInfo.rows;
 
         return res.json({ company: compInfo });
     } catch (err) {
@@ -45,13 +44,13 @@ router.get("/:code", async (req, res, next) => {
 
 router.post("/", async (req, res, next) => {
     try {
-        const { code, name, description } = req.body;
+        const { name, description } = req.body;
 
         const result = await db.query(
             `INSERT INTO companies (code, name, description) 
              VALUES ($1, $2, $3)
              RETURNING code, name, description`,
-            [code, name, description]
+            [slug(name, { replacement: "-", lower: true, strict: true }), name, description]
         );
 
         return res.status(201).json({ company: result.rows[0] });

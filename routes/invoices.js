@@ -1,16 +1,14 @@
 const express = require("express");
 const router = new express.Router();
 const db = require("../db");
+const ExpressError = require("../expressError");
 
 
 router.get("/", async (req, res, next) => {
-    console.log("*****************************************");
     try {
-        console.log("before await")
         const results = await db.query(
             `SELECT id, comp_code 
              FROM invoices`);
-        console.log(results);
         return res.json({ invoices: results.rows });
     } catch (err) {
         return next(err);
@@ -61,19 +59,38 @@ router.post("/", async (req, res, next) => {
 
 router.patch('/:id', async (req, res, next) => {
     try {
-        const { amt } = req.body;
+        const { amt, paid } = req.body;
+
+        const currInv = await db.query(
+            `SELECT paid
+             FROM invoices
+             WHERE id = $1`,
+            [req.params.id]);
+
+        if (currInv.rows.length === 0) {
+            throw new ExpressError('No invoice found by that id', 404)
+        }
+
+        let paidDate = null;
+        const curPaidDate = currInv.rows[0].paid_date;
+
+        if (!curPaidDate && paid) {
+            paidDate = new Date();
+        } else if (!paid) {
+            paidDate = null;
+        } else {
+            paidDate = curPaidDate;
+        }
 
         const result = await db.query(
             `UPDATE invoices 
-             SET amt=$1
-             WHERE id=$3
+             SET amt=$1, paid=$2, paid_date=$3
+             WHERE id=$4
              RETURNING id, comp_code, amt, paid, add_date, paid_date`,
-            [req.params.id, amt]
+            [amt, paid, paidDate, req.params.id]
         );
 
-        if (result.rows.length === 0) {
-            throw new ExpressError('No invoice found by that id', 404)
-        }
+
         return res.json({ invoice: result.rows[0] });
 
     } catch (err) {
